@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>解剖学フラッシュカード</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: #f9f9fb; color: #1a1a2e; font-family: 'Segoe UI', system-ui, sans-serif; }
+  .card-scene { perspective: 1200px; width: 100%; max-width: 480px; margin: 0 auto; height: 220px; }
+  .card-inner { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; transition: transform 0.6s cubic-bezier(0.4,0,0.2,1); cursor: pointer; }
+  .card-inner.flipped { transform: rotateY(180deg); }
+  .card-face { position: absolute; inset: 0; backface-visibility: hidden; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
+  .card-front { background: #fff; border: 2px solid #dc143c; box-shadow: 0 4px 16px rgba(220,20,60,0.15); }
+  .card-back { background: #fff5f5; border: 2px solid #dc143c; transform: rotateY(180deg); box-shadow: 0 4px 16px rgba(220,20,60,0.15); }
+  .red { color: #dc143c; }
+  .red-bg { background: #dc143c; }
+  .red-light { background: #ffe4e8; }
+  .btn-red { background: #dc143c; color: #fff; border: none; transition: all 0.2s; }
+  .btn-red:hover { background: #b01030; }
+  .btn-outline-red { background: #fff; color: #dc143c; border: 2px solid #dc143c; transition: all 0.2s; }
+  .btn-outline-red:hover { background: #ffe4e8; }
+  .system-tab { border-bottom: 3px solid transparent; transition: all 0.2s; cursor: pointer; }
+  .system-tab.active { border-bottom-color: #dc143c; color: #dc143c; font-weight: 600; }
+  .progress-bar { background: #f0d0d4; border-radius: 99px; overflow: hidden; }
+  .progress-fill { background: #dc143c; transition: width 0.4s; }
+  .easy-btn { background: #16a34a; color: #fff; }
+  .easy-btn:hover { background: #15803d; }
+  .medium-btn { background: #d97706; color: #fff; }
+  .medium-btn:hover { background: #b45309; }
+  .hard-btn { background: #dc2626; color: #fff; }
+  .hard-btn:hover { background: #b91c1c; }
+  .mini-chart { display: flex; gap: 4px; align-items: flex-end; height: 40px; }
+  .chart-bar { flex: 1; border-radius: 3px 3px 0 0; transition: height 0.4s; }
+</style>
+</head>
+<body class="min-h-screen">
+
+<div class="max-w-2xl mx-auto p-4">
+  <!-- Header -->
+  <div class="text-center mb-6">
+    <h1 class="text-3xl font-bold red mb-1">解剖学フラッシュカード</h1>
+    <p class="text-xs text-gray-400">Medical Anatomy Flashcard System</p>
+  </div>
+
+  <!-- Nav tabs: Study / Progress -->
+  <div class="flex border-b border-gray-200 mb-6">
+    <button class="system-tab px-6 py-2 text-sm" id="tabStudy" onclick="switchTab('study')" aria-label="学習タブ">学習</button>
+    <button class="system-tab px-6 py-2 text-sm" id="tabProgress" onclick="switchTab('progress')" aria-label="進捗タブ">進捗</button>
+    <button class="system-tab px-6 py-2 text-sm" id="tabSettings" onclick="switchTab('settings')" aria-label="設定タブ">設定</button>
+  </div>
+
+  <!-- Study Tab -->
+  <div id="paneStudy">
+    <!-- System selector -->
+    <div class="flex gap-2 flex-wrap mb-4" id="systemFilter">
+      <button class="px-3 py-1 rounded-full text-xs border border-gray-300 system-filter-btn active" data-sys="all" aria-label="全システムを表示">全て</button>
+      <button class="px-3 py-1 rounded-full text-xs border border-gray-300 system-filter-btn" data-sys="骨格系" aria-label="骨格系を表示">骨格系</button>
+      <button class="px-3 py-1 rounded-full text-xs border border-gray-300 system-filter-btn" data-sys="筋肉系" aria-label="筋肉系を表示">筋肉系</button>
+      <button class="px-3 py-1 rounded-full text-xs border border-gray-300 system-filter-btn" data-sys="循環器系" aria-label="循環器系を表示">循環器系</button>
+      <button class="px-3 py-1 rounded-full text-xs border border-gray-300 system-filter-btn" data-sys="消化器系" aria-label="消化器系を表示">消化器系</button>
+      <button class="px-3 py-1 rounded-full text-xs border border-gray-300 system-filter-btn" data-sys="神経系" aria-label="神経系を表示">神経系</button>
+    </div>
+
+    <!-- Mode toggle -->
+    <div class="flex gap-2 mb-4">
+      <button id="modeSeq" class="btn-red rounded px-4 py-1 text-xs font-medium" onclick="setMode('sequential')" aria-label="順番通りモードを選択">順番通り</button>
+      <button id="modeSR" class="btn-outline-red rounded px-4 py-1 text-xs font-medium" onclick="setMode('sr')" aria-label="間隔反復モードを選択">間隔反復 (SM-2)</button>
+    </div>
+
+    <!-- Card counter -->
+    <div class="flex justify-between text-xs text-gray-500 mb-3">
+      <span>カード <span id="cardIdx" class="red font-bold">1</span> / <span id="cardTotal" class="font-bold">50</span></span>
+      <span id="srsInfo" class="text-gray-400"></span>
+    </div>
+
+    <!-- Flashcard -->
+    <div class="card-scene mb-4" id="cardScene" onclick="flipCard()" aria-label="カードをクリックして裏返す" role="button" tabindex="0">
+      <div class="card-inner" id="cardInner">
+        <div class="card-face card-front">
+          <div class="text-xs red font-semibold mb-2" id="cardSystem"></div>
+          <div class="text-3xl font-bold text-center text-gray-800" id="cardFront"></div>
+          <div class="text-xs text-gray-400 mt-3">タップで裏返す</div>
+        </div>
+        <div class="card-face card-back">
+          <div class="text-xs red font-semibold mb-1" id="cardBackTitle"></div>
+          <div class="text-xl font-bold text-gray-800 mb-2 text-center" id="cardBack"></div>
+          <div class="text-sm text-gray-600 text-center leading-relaxed" id="cardDesc"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SR buttons (hidden until flipped) -->
+    <div id="srButtons" class="hidden grid grid-cols-3 gap-2 mb-4">
+      <button class="easy-btn rounded p-2 text-sm font-bold" onclick="srRate('easy')" aria-label="簡単だった">簡単</button>
+      <button class="medium-btn rounded p-2 text-sm font-bold" onclick="srRate('medium')" aria-label="普通だった">普通</button>
+      <button class="hard-btn rounded p-2 text-sm font-bold" onclick="srRate('hard')" aria-label="難しかった">難しい</button>
+    </div>
+
+    <!-- Navigation -->
+    <div class="flex gap-2">
+      <button class="btn-outline-red rounded flex-1 p-2 text-sm" onclick="prevCard()" aria-label="前のカード">← 前へ</button>
+      <button class="btn-red rounded flex-1 p-2 text-sm" onclick="nextCard()" aria-label="次のカード">次へ →</button>
+    </div>
+  </div>
+
+  <!-- Progress Tab -->
+  <div id="paneProgress" class="hidden">
+    <div class="grid grid-cols-1 gap-4" id="progressBars"></div>
+  </div>
+
+  <!-- Settings Tab -->
+  <div id="paneSettings" class="hidden">
+    <div class="bg-white rounded-xl border border-gray-200 p-4 mb-4">
+      <div class="font-semibold red mb-3">データ管理</div>
+      <button class="btn-outline-red rounded px-4 py-2 text-sm" onclick="resetProgress()" aria-label="進捗をリセットする">進捗をリセット</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const CARDS = [
+  // 骨格系
+  {sys:'骨格系', jp:'大腿骨', en:'Femur', desc:'大腿部（太もも）に位置する人体最大・最長の骨で、体重を支え歩行を可能にする。'},
+  {sys:'骨格系', jp:'脛骨', en:'Tibia', desc:'下腿の内側に位置する骨で、体重の大部分を支え膝関節と足首関節を形成する。'},
+  {sys:'骨格系', jp:'腓骨', en:'Fibula', desc:'下腿の外側に位置する細長い骨で、足首の安定性を担う補助的な役割を持つ。'},
+  {sys:'骨格系', jp:'上腕骨', en:'Humerus', desc:'上腕に位置する骨で、肩関節と肘関節を形成し腕の動作の基軸となる。'},
+  {sys:'骨格系', jp:'橈骨', en:'Radius', desc:'前腕の親指側に位置する骨で、手首の回転（回内・回外）に関わる。'},
+  {sys:'骨格系', jp:'尺骨', en:'Ulna', desc:'前腕の小指側に位置する骨で、肘を形成し安定した腕の動きを支える。'},
+  {sys:'骨格系', jp:'胸骨', en:'Sternum', desc:'胸部中央に縦走する平らな骨で、肋骨を前方で連結し胸腔を保護する。'},
+  {sys:'骨格系', jp:'鎖骨', en:'Clavicle', desc:'肩部に水平に走る細い骨で、肩甲骨と胸骨を連結し肩の動きを支える。'},
+  {sys:'骨格系', jp:'頭蓋骨', en:'Cranium', desc:'脳を包む8つの骨から成る頭部の骨格で、脳・感覚器官を衝撃から保護する。'},
+  {sys:'骨格系', jp:'椎骨', en:'Vertebra', desc:'脊柱を構成する個々の骨で、脊髄を保護しながら体幹の支持と運動を担う。'},
+  // 筋肉系
+  {sys:'筋肉系', jp:'大腿四頭筋', en:'Quadriceps Femoris', desc:'大腿前面の4つの筋肉からなる群で、膝関節の伸展（脚を伸ばす動作）を主に担う。'},
+  {sys:'筋肉系', jp:'ハムストリングス', en:'Hamstrings', desc:'大腿後面の3筋群で、膝関節の屈曲と股関節の伸展を行い走行・ジャンプに貢献する。'},
+  {sys:'筋肉系', jp:'大殿筋', en:'Gluteus Maximus', desc:'殿部最大の筋肉で、股関節の伸展・外旋を担い直立歩行に不可欠な力を生み出す。'},
+  {sys:'筋肉系', jp:'三角筋', en:'Deltoid', desc:'肩を覆う三角形の筋肉で、上腕の外転・屈曲・伸展など多方向の腕の動きを制御する。'},
+  {sys:'筋肉系', jp:'上腕二頭筋', en:'Biceps Brachii', desc:'上腕前面の筋肉で、肘関節の屈曲と前腕の回外（手のひらを上に向ける動作）を行う。'},
+  {sys:'筋肉系', jp:'上腕三頭筋', en:'Triceps Brachii', desc:'上腕後面の筋肉で、肘関節の伸展（腕を伸ばす動作）を担い押す動作に重要。'},
+  {sys:'筋肉系', jp:'腹直筋', en:'Rectus Abdominis', desc:'腹部前面を縦走する筋肉で、体幹の屈曲と腹腔内圧の調節を行うコア筋肉。'},
+  {sys:'筋肉系', jp:'僧帽筋', en:'Trapezius', desc:'背部上方から肩にかけて広がる大きな筋肉で、肩甲骨の挙上・引き寄せ・回転を担う。'},
+  {sys:'筋肉系', jp:'広背筋', en:'Latissimus Dorsi', desc:'背部最大の筋肉で、上腕の内転・内旋・伸展を行い水泳や懸垂などに関わる。'},
+  {sys:'筋肉系', jp:'腓腹筋', en:'Gastrocnemius', desc:'ふくらはぎの主要筋肉で、足首の底屈（かかとを上げる動作）と膝屈曲を担う。'},
+  // 循環器系
+  {sys:'循環器系', jp:'大動脈', en:'Aorta', desc:'心臓左心室から出る最大の動脈で、全身へ酸素化された血液を送り出す主要経路。'},
+  {sys:'循環器系', jp:'僧帽弁', en:'Mitral Valve', desc:'左心房と左心室の間にある二尖弁で、血液の逆流を防ぎ心臓のポンプ機能を維持する。'},
+  {sys:'循環器系', jp:'冠動脈', en:'Coronary Artery', desc:'心臓自身に酸素と栄養を供給する動脈で、狭窄が心筋梗塞の主要原因となる。'},
+  {sys:'循環器系', jp:'肺動脈', en:'Pulmonary Artery', desc:'右心室から肺へ脱酸素化血液を送る動脈で、ガス交換のための血液循環を担う。'},
+  {sys:'循環器系', jp:'静脈弁', en:'Venous Valve', desc:'静脈内に存在する弁で、血液が重力に逆らって心臓へ戻る際の逆流を防ぐ構造。'},
+  {sys:'循環器系', jp:'心室', en:'Ventricle', desc:'心臓下部の2つの部屋（左右）で、全身・肺へ血液を力強く送り出すポンプ機能を持つ。'},
+  {sys:'循環器系', jp:'心房', en:'Atrium', desc:'心臓上部の2つの部屋（左右）で、静脈から返ってきた血液を受け取り心室へ送る。'},
+  {sys:'循環器系', jp:'毛細血管', en:'Capillary', desc:'最小径の血管で、組織細胞との間で酸素・栄養・老廃物の物質交換が行われる場所。'},
+  {sys:'循環器系', jp:'リンパ節', en:'Lymph Node', desc:'リンパ管上に分布する小器官で、免疫細胞が病原体を濾過・撃退する免疫の要所。'},
+  {sys:'循環器系', jp:'洞房結節', en:'Sinoatrial Node', desc:'右心房上部に位置する心臓の「ペースメーカー」で、電気信号を発し心拍リズムを制御する。'},
+  // 消化器系
+  {sys:'消化器系', jp:'食道', en:'Esophagus', desc:'咽頭から胃へ食物を運ぶ約25cmの管で、蠕動運動によって食物を下方へ送り込む。'},
+  {sys:'消化器系', jp:'十二指腸', en:'Duodenum', desc:'胃の直後に位置する小腸の最初の部分で、膵液・胆汁が注ぎ込まれ消化が本格化する。'},
+  {sys:'消化器系', jp:'空腸', en:'Jejunum', desc:'小腸中間部で栄養素の大部分が吸収される場所。絨毛が密に発達し吸収面積を最大化。'},
+  {sys:'消化器系', jp:'回腸', en:'Ileum', desc:'小腸末端部で、ビタミンB12や胆汁酸の特異的吸収が行われる重要な消化吸収部位。'},
+  {sys:'消化器系', jp:'盲腸', en:'Cecum', desc:'大腸の始まりにある袋状部位で、回腸との接合部。虫垂が付属し免疫機能の一端も担う。'},
+  {sys:'消化器系', jp:'肝臓', en:'Liver', desc:'体最大の腺器官で、代謝・解毒・胆汁産生・タンパク合成など500以上の機能を持つ。'},
+  {sys:'消化器系', jp:'膵臓', en:'Pancreas', desc:'消化酵素（外分泌）とインスリン・グルカゴン（内分泌）を産生する複合機能臓器。'},
+  {sys:'消化器系', jp:'胆嚢', en:'Gallbladder', desc:'肝臓下面に付着する小器官で、胆汁を濃縮・貯留し食事時に十二指腸へ放出する。'},
+  {sys:'消化器系', jp:'直腸', en:'Rectum', desc:'大腸末端部で、糞便を一時貯留し排便反射を引き起こすまで内容物を保持する。'},
+  {sys:'消化器系', jp:'虫垂', en:'Appendix', desc:'盲腸に付属する指状の突起で、免疫組織（MALT）を含み腸内細菌叢の維持に役立つとされる。'},
+  // 神経系
+  {sys:'神経系', jp:'大脳皮質', en:'Cerebral Cortex', desc:'大脳の最外層で、思考・言語・感覚・運動の高次機能を担う神経細胞層。'},
+  {sys:'神経系', jp:'小脳', en:'Cerebellum', desc:'脳幹後方に位置し、運動の協調・バランス・姿勢制御を精密に調整する脳部位。'},
+  {sys:'神経系', jp:'脳幹', en:'Brainstem', desc:'呼吸・心拍・血圧などの生命維持機能を自動制御し大脳と脊髄の中継を行う部位。'},
+  {sys:'神経系', jp:'視床下部', en:'Hypothalamus', desc:'体温・食欲・水分バランス・概日リズムなどをホルモンと自律神経系で統合制御する。'},
+  {sys:'神経系', jp:'海馬', en:'Hippocampus', desc:'大脳辺縁系の一部で、短期記憶を長期記憶に変換する「記憶の門」として機能する。'},
+  {sys:'神経系', jp:'扁桃体', en:'Amygdala', desc:'大脳辺縁系に位置しアーモンド形の構造で、恐怖・怒りなど情動反応の処理中枢。'},
+  {sys:'神経系', jp:'脊髄', en:'Spinal Cord', desc:'脊椎管内を走る神経の束で、脳と末梢神経の情報を中継し反射運動も制御する。'},
+  {sys:'神経系', jp:'軸索', en:'Axon', desc:'神経細胞（ニューロン）の長い突起で、電気信号（活動電位）を遠距離まで伝達する。'},
+  {sys:'神経系', jp:'シナプス', en:'Synapse', desc:'ニューロン間の接合部で、神経伝達物質を介した化学的情報伝達が行われる微細構造。'},
+  {sys:'神経系', jp:'髄鞘', en:'Myelin Sheath', desc:'軸索を覆う脂質性の絶縁層で、神経信号の伝導速度を著しく高める「絶縁コーティング」。'},
+];
+
+const SYSTEMS = ['骨格系','筋肉系','循環器系','消化器系','神経系'];
+
+let studyState = {
+  mode: 'sequential',
+  filter: 'all',
+  deck: [],
+  idx: 0,
+  flipped: false
+};
+
+let progress = {};
+function loadProgress() {
+  try { progress = JSON.parse(localStorage.getItem('anatomyProgress') || '{}'); } catch(e){ progress={}; }
+}
+function saveProgress() { localStorage.setItem('anatomyProgress', JSON.stringify(progress)); }
+
+loadProgress();
+
+// Initialize progress for all cards
+CARDS.forEach((c,i) => {
+  if (!progress[i]) progress[i] = { easeFactor: 2.5, interval: 1, dueDate: 0, correct: 0, total: 0 };
+});
+
+function buildDeck() {
+  let pool = CARDS.map((c,i) => ({...c, idx:i}));
+  if (studyState.filter !== 'all') pool = pool.filter(c => c.sys === studyState.filter);
+
+  if (studyState.mode === 'sr') {
+    const now = Date.now();
+    pool = pool.filter(c => (progress[c.idx].dueDate || 0) <= now);
+    if (pool.length === 0) pool = CARDS.map((c,i) => ({...c, idx:i})).filter(c => studyState.filter === 'all' || c.sys === studyState.filter);
+    pool.sort((a,b) => (progress[a.idx].dueDate||0) - (progress[b.idx].dueDate||0));
+  }
+  return pool;
+}
+
+function show(id) { document.getElementById(id).classList.remove('hidden'); }
+function hide(id) { document.getElementById(id).classList.add('hidden'); }
+
+function switchTab(tab) {
+  ['study','progress','settings'].forEach(t => {
+    document.getElementById('pane' + t.charAt(0).toUpperCase() + t.slice(1)).classList.add('hidden');
+    document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1)).classList.remove('active');
+  });
+  show('pane' + tab.charAt(0).toUpperCase() + tab.slice(1));
+  document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+  if (tab === 'progress') renderProgress();
+}
+
+switchTab('study');
+
+// System filter
+document.querySelectorAll('.system-filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.system-filter-btn').forEach(b => b.classList.remove('active','bg-red-600','text-white'));
+    btn.classList.add('active','bg-red-600','text-white');
+    studyState.filter = btn.dataset.sys;
+    studyState.deck = buildDeck();
+    studyState.idx = 0;
+    renderCard();
+  });
+});
+
+function setMode(m) {
+  studyState.mode = m;
+  if (m === 'sequential') {
+    document.getElementById('modeSeq').className = 'btn-red rounded px-4 py-1 text-xs font-medium';
+    document.getElementById('modeSR').className = 'btn-outline-red rounded px-4 py-1 text-xs font-medium';
+  } else {
+    document.getElementById('modeSeq').className = 'btn-outline-red rounded px-4 py-1 text-xs font-medium';
+    document.getElementById('modeSR').className = 'btn-red rounded px-4 py-1 text-xs font-medium';
+  }
+  studyState.deck = buildDeck();
+  studyState.idx = 0;
+  renderCard();
+}
+
+function flipCard() {
+  studyState.flipped = !studyState.flipped;
+  document.getElementById('cardInner').classList.toggle('flipped', studyState.flipped);
+  document.getElementById('srButtons').classList.toggle('hidden', !studyState.flipped);
+}
+
+function renderCard() {
+  studyState.flipped = false;
+  document.getElementById('cardInner').classList.remove('flipped');
+  hide('srButtons');
+
+  const deck = studyState.deck;
+  if (deck.length === 0) {
+    document.getElementById('cardFront').textContent = 'カードがありません';
+    document.getElementById('cardSystem').textContent = '';
+    document.getElementById('cardBack').textContent = '';
+    document.getElementById('cardDesc').textContent = '';
+    document.getElementById('cardBackTitle').textContent = '';
+    return;
+  }
+
+  const card = deck[studyState.idx % deck.length];
+  document.getElementById('cardSystem').textContent = card.sys;
+  document.getElementById('cardFront').textContent = card.jp;
+  document.getElementById('cardBackTitle').textContent = card.jp;
+  document.getElementById('cardBack').textContent = card.en;
+  document.getElementById('cardDesc').textContent = card.desc;
+  document.getElementById('cardIdx').textContent = (studyState.idx % deck.length) + 1;
+  document.getElementById('cardTotal').textContent = deck.length;
+
+  const p = progress[card.idx];
+  if (studyState.mode === 'sr') {
+    const due = p.dueDate ? new Date(p.dueDate).toLocaleDateString('ja-JP') : '今すぐ';
+    document.getElementById('srsInfo').textContent = `次回: ${due} / 間隔: ${p.interval}日`;
+  } else {
+    document.getElementById('srsInfo').textContent = '';
+  }
+}
+
+function nextCard() {
+  studyState.idx = (studyState.idx + 1) % studyState.deck.length;
+  renderCard();
+}
+function prevCard() {
+  studyState.idx = (studyState.idx - 1 + studyState.deck.length) % studyState.deck.length;
+  renderCard();
+}
+
+function srRate(rating) {
+  const card = studyState.deck[studyState.idx % studyState.deck.length];
+  const p = progress[card.idx];
+  p.total = (p.total || 0) + 1;
+
+  // SM-2 simplified
+  const q = { easy: 5, medium: 3, hard: 1 }[rating];
+  if (q >= 3) {
+    p.correct = (p.correct || 0) + 1;
+    if (p.interval === 1) p.interval = 6;
+    else if (p.interval === 6) p.interval = Math.round(p.interval * p.easeFactor);
+    else p.interval = Math.round(p.interval * p.easeFactor);
+  } else {
+    p.interval = 1;
+  }
+  p.easeFactor = Math.max(1.3, p.easeFactor + 0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
+  p.dueDate = Date.now() + p.interval * 24 * 60 * 60 * 1000;
+
+  saveProgress();
+
+  if (studyState.mode === 'sr') {
+    studyState.deck = buildDeck();
+    if (studyState.deck.length === 0) {
+      studyState.idx = 0;
+    } else {
+      studyState.idx = studyState.idx % studyState.deck.length;
+    }
+  } else {
+    studyState.idx = (studyState.idx + 1) % studyState.deck.length;
+  }
+  renderCard();
+}
+
+function renderProgress() {
+  const cont = document.getElementById('progressBars');
+  cont.innerHTML = '';
+  SYSTEMS.forEach(sys => {
+    const sysCards = CARDS.map((c,i) => ({...c, idx:i})).filter(c => c.sys === sys);
+    const total = sysCards.length;
+    const correct = sysCards.reduce((s,c) => s + (progress[c.idx]?.correct || 0), 0);
+    const totalAttempts = sysCards.reduce((s,c) => s + (progress[c.idx]?.total || 0), 0);
+    const pct = totalAttempts > 0 ? Math.round(correct / totalAttempts * 100) : 0;
+
+    const div = document.createElement('div');
+    div.className = 'bg-white rounded-xl border border-gray-200 p-4';
+
+    const header = document.createElement('div');
+    header.className = 'flex justify-between items-center mb-2';
+    const title = document.createElement('span');
+    title.className = 'font-semibold text-gray-800';
+    title.textContent = sys;
+    const pctLabel = document.createElement('span');
+    pctLabel.className = 'red font-bold text-sm';
+    pctLabel.textContent = totalAttempts > 0 ? pct + '%' : '未学習';
+    header.appendChild(title);
+    header.appendChild(pctLabel);
+
+    const bar = document.createElement('div');
+    bar.className = 'progress-bar h-3 mb-3';
+    const fill = document.createElement('div');
+    fill.className = 'progress-fill h-full';
+    fill.style.width = pct + '%';
+    bar.appendChild(fill);
+
+    // Mini chart (per card)
+    const chart = document.createElement('div');
+    chart.className = 'mini-chart';
+    sysCards.forEach(c => {
+      const p = progress[c.idx];
+      const cpct = p.total > 0 ? p.correct/p.total : 0;
+      const b = document.createElement('div');
+      b.className = 'chart-bar';
+      b.style.height = Math.max(4, cpct * 40) + 'px';
+      b.style.background = cpct > 0.7 ? '#dc143c' : cpct > 0.4 ? '#f87171' : '#fecaca';
+      b.title = c.jp;
+      chart.appendChild(b);
+    });
+
+    const info = document.createElement('div');
+    info.className = 'text-xs text-gray-400 mt-2';
+    info.textContent = `${total}枚 / ${totalAttempts}回練習`;
+
+    div.appendChild(header);
+    div.appendChild(bar);
+    div.appendChild(chart);
+    div.appendChild(info);
+    cont.appendChild(div);
+  });
+}
+
+function resetProgress() {
+  if (!confirm('全ての進捗をリセットしますか？')) return;
+  localStorage.removeItem('anatomyProgress');
+  loadProgress();
+  CARDS.forEach((c,i) => {
+    if (!progress[i]) progress[i] = { easeFactor: 2.5, interval: 1, dueDate: 0, correct: 0, total: 0 };
+  });
+}
+
+// Keyboard navigation
+document.addEventListener('keydown', e => {
+  if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); flipCard(); }
+  if (e.key === 'ArrowRight') nextCard();
+  if (e.key === 'ArrowLeft') prevCard();
+  if (e.key === '1') srRate('easy');
+  if (e.key === '2') srRate('medium');
+  if (e.key === '3') srRate('hard');
+});
+
+// Init
+studyState.deck = buildDeck();
+renderCard();
+</script>
+</body>
+</html>
